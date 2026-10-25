@@ -222,13 +222,24 @@ public final class Songlinks {
      *
      * @param ipiNameNumbers the numbers to check. Leading zeros may be left off, and spaces and dashes are ignored.
      * @return for each distinct number, the person who holds it and a status, with totals in {@code summary()}
-     * @throws IllegalArgumentException when the list is empty or holds more than 50 numbers
+     * @throws IllegalArgumentException when the list is empty, holds more than 50 numbers, or has an entry holding a
+     *                                  comma, semicolon, line break or the text {@code %2C} (which the API would read as
+     *                                  several numbers), or a null entry
      * @throws SonglinksException       when the API answers with an error
      */
     public WritersResponse writers(List<String> ipiNameNumbers) {
         if (ipiNameNumbers.isEmpty()) throw new IllegalArgumentException("writers() needs at least one IPI name number");
         if (ipiNameNumbers.size() > WRITERS_MAX) {
             throw new IllegalArgumentException("writers() takes at most " + WRITERS_MAX + " IPI name numbers per call");
+        }
+        for (String n : ipiNameNumbers) {
+            if (n == null) throw new IllegalArgumentException("writers() was given a null IPI name number");
+            // The API splits its list on these, and on the text %2C, so one entry holding one would be read as several.
+            // The edges are trimmed first, as the API trims them, so a line read from a Windows file (ending "\r") passes.
+            String inner = IPI_EDGE_SPACE.matcher(n).replaceAll("");
+            if (inner.matches("(?s).*([,;\\r\\n]|%2[cC]).*")) {
+                throw new IllegalArgumentException("writers() takes one IPI name number per entry, got \"" + n + "\"");
+            }
         }
         return get("/v1/writers", Map.of("ipi", String.join(",", ipiNameNumbers)), WritersResponse.class);
     }
@@ -258,12 +269,17 @@ public final class Songlinks {
         // The same reading as the API's own (writer/service.py ipi_key).
         String digits = IPI_SEPARATORS.matcher(ipiNameNumber).replaceAll("");
         if (IPI_DIGITS.matcher(digits).matches()) return "0".repeat(11 - digits.length()) + digits;
-        String trimmed = ipiNameNumber.strip();
+        String trimmed = IPI_EDGE_SPACE.matcher(ipiNameNumber).replaceAll("");
         return trimmed.codePointCount(0, trimmed.length()) > 32
                 ? trimmed.substring(0, trimmed.offsetByCodePoints(0, 32)) : trimmed;
     }
 
-    private static final Pattern IPI_SEPARATORS = Pattern.compile("[\\s\\-\\x{2010}-\\x{2015}\\x{2212}]");
+    // Python's \s, which the API's reading uses, is any Unicode space plus 0x1c-0x1f; Java's \s is ASCII-only unless
+    // UNICODE_CHARACTER_CLASS is set, and without it a number pasted with non-breaking spaces would not match.
+    private static final Pattern IPI_SEPARATORS = Pattern.compile(
+            "[\\s\\x{1c}-\\x{1f}\\-\\x{2010}-\\x{2015}\\x{2212}]", Pattern.UNICODE_CHARACTER_CLASS);
+    private static final Pattern IPI_EDGE_SPACE = Pattern.compile(
+            "^[\\s\\x{1c}-\\x{1f}]+|[\\s\\x{1c}-\\x{1f}]+$", Pattern.UNICODE_CHARACTER_CLASS);
     private static final Pattern IPI_DIGITS = Pattern.compile("[0-9]{1,11}");
 
     private <T> T get(String path, Map<String, String> query, Class<T> type) {

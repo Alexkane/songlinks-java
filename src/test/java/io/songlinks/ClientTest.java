@@ -225,6 +225,14 @@ class ClientTest {
     }
 
     @Test
+    void writersAcceptsALineFromAWindowsFile() {
+        replies.add(Reply.json(200, "{\"writers\":[],\"summary\":{\"numbers\":0,\"person\":0,\"several\":0,"
+                + "\"none\":0,\"invalid\":0,\"persons\":0,\"with_works_elsewhere\":0}}"));
+        client(0).writers(List.of("338980326\r"));
+        assertEquals(1, requests.size());
+    }
+
+    @Test
     void a422SaysWhichParameterWasWrong() {
         replies.add(Reply.json(422, "{\"detail\":[{\"loc\":[\"query\",\"threshold\"],"
                 + "\"msg\":\"Input should be less than or equal to 0.99\"}]}"));
@@ -239,6 +247,9 @@ class ClientTest {
         assertThrows(IllegalArgumentException.class, () -> client(0).lookup(" "));
         assertThrows(IllegalArgumentException.class, () -> client(0).person(""));
         assertThrows(IllegalArgumentException.class, () -> client(0).personWorks(" "));
+        for (String bad : List.of("338980326,00340247397", "338980326;1", "338980326\n1", "338980326%2C1")) {
+            assertThrows(IllegalArgumentException.class, () -> client(0).writers(List.of(bad)));
+        }
         assertEquals(0, requests.size());
     }
 
@@ -248,6 +259,8 @@ class ClientTest {
         assertEquals("00338980326", Songlinks.normalizeIpi("003-389-803 26"));
         assertEquals("00338980326", Songlinks.normalizeIpi("\t003\u2013389803 26")); // a tab and an en dash
         assertEquals("abc", Songlinks.normalizeIpi(" abc ")); // invalid: echoed trimmed, as the API does
+        assertEquals("00338980326", Songlinks.normalizeIpi("003\u00a0389\u00a0803\u00a026")); // non-breaking spaces
+        assertEquals("00338980326", Songlinks.normalizeIpi("338980326\u3000")); // an ideographic space
         assertEquals("15036818.0", Songlinks.normalizeIpi("15036818.0"));
         assertEquals("123456789012", Songlinks.normalizeIpi("123456789012"));
     }

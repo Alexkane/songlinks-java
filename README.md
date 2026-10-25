@@ -10,10 +10,13 @@ with no number at all. Songlinks groups those registrations into one person, sho
 keeps apart the ones it isn't sure of.
 
 - **Free, with no key and no sign-up.**
-- **Typed.** Immutable records for every answer, checked against the API's OpenAPI document on every build.
+- **Typed.** Every answer is a Java class with named fields, checked against the API's own description of itself on
+  every build.
 - **Light.** Java 17+, the JDK's own `HttpClient`, and Jackson for JSON. Nothing else.
-- **Built to be called from real services.** Typed exceptions, retries that honour `Retry-After`, lazy paging, and
-  thread-safe: build one client and share it.
+- **Built for real apps.** Clear errors, automatic retries when the API is busy, and long lists paged for you.
+
+> **New to this?** Skip to [Your first program, step by step](#your-first-program-step-by-step): it starts from
+> installing the language and ends with a working answer. The [words used here](#the-words-used-here) are explained too.
 
 **Not on Maven Central yet.** Until it is, install it from a checkout, which puts it in your local Maven repository:
 
@@ -34,6 +37,8 @@ Then depend on it as usual:
 Gradle: `implementation("io.songlinks:songlinks:0.1.0")`
 
 ## Thirty seconds
+
+These lines go inside a `main` method; [`examples/ResolveName.java`](examples/ResolveName.java) shows a whole program.
 
 ```java
 import io.songlinks.Songlinks;
@@ -77,6 +82,99 @@ SongMatch match = songlinks.lookup("amy allen", LookupOptions.song("espresso")).
 songlinks.personWorks("SLP-ZYM7-GD3E-S").forEach(w -> System.out.println(w.title()));
 ```
 
+## Your first program, step by step
+
+Never called an API from code before? This takes about five minutes.
+
+**Before you start**, you need two things:
+
+- **A terminal**, where you type commands. On a Mac, open Terminal (in Applications, then Utilities). On Windows, open
+  PowerShell from the Start menu. Type each command below on its own line and press Enter after it.
+- **A plain-text editor** for code, such as the free [Visual Studio Code](https://code.visualstudio.com). A word
+  processor (Word, or TextEdit in its usual mode) adds formatting that stops code from running.
+1. **Install Java** 17 or later, for example the free [Temurin](https://adoptium.net) build, and **Git** from
+   [git-scm.com](https://git-scm.com/downloads) (on a Mac, the first `git` command offers to install it: say yes).
+   Check they worked by typing `java -version` and `git --version`.
+2. **Get the SDK and build it.** The first build downloads Maven (the tool Java projects use to build and to fetch
+   libraries), so it takes a minute or two:
+
+   ```sh
+   git clone https://github.com/Alexkane/songlinks-java
+   cd songlinks-java
+   ./mvnw -q install -DskipTests
+   ```
+
+   On Windows, in PowerShell, the last line is `.\mvnw.cmd -q install -DskipTests`. It prints nothing when it works.
+   On Java 24 or later you may first see `WARNING` lines about a "restricted method" or `sun.misc.Unsafe`: they
+   come from Maven itself and are harmless.
+3. **Run the first example**, from the same folder, with any songwriter's full name:
+
+   ```sh
+   scripts/run-example.sh ResolveName "mark hoppus"
+   ```
+
+   On Windows, in PowerShell, run these two lines instead (the first one only once):
+
+   ```powershell
+   .\mvnw.cmd -q dependency:build-classpath "-Dmdep.outputFile=target/classpath.txt"
+   java -cp "target/classes;$(Get-Content target/classpath.txt)" examples/ResolveName.java "mark hoppus"
+   ```
+
+   The first run builds once more and may print the same warnings. You should see
+   `SLP-ZYM7-GD3E-S  MARK HOPPUS  302 works`, then the registrations behind that person and what joined them
+   (`model` means Songlinks judged two registrations to be the same person).
+
+   **Keep the quotes** around the name: without them, only the first word is sent.
+
+   **What you might see instead:**
+   - **Several lines.** The name could belong to more than one person, so each possible person gets a line.
+   - **`(no person ID yet)`.** Songlinks found the registrations but hasn't given that person an ID yet. That is
+     normal, and the rest of the line is still the answer.
+   - **`No answer: single-token`.** The name is one word, such as `madonna`, which matches too many people.
+     Use the full name.
+   - **`No answer: no-match`.** Nothing registered is close to that name. Check the spelling.
+4. **Change it.** The program is [`examples/ResolveName.java`](examples/ResolveName.java), about 40 lines. Edit it in
+   your editor and run the same command again: changes to the examples need no separate build step.
+
+To use the SDK in your own Maven project, add the dependency shown at the top of this page to its `pom.xml`; step 2
+has already put the library where Maven will find it. (Gradle needs `mavenLocal()` in its `repositories` to look
+there.) From here, the [examples](#examples) do real jobs, [Reading an answer](#reading-an-answer) explains what comes
+back, and the [words used here](#the-words-used-here) are explained just below.
+
+## The words used here
+
+Music-publishing words, which you'll meet in the answers:
+
+- **Songwriter registration**: when a song is written, its publisher registers it so royalties reach the people who
+  wrote it. Each registration names the writers, as typed by whoever filed it. One songwriter can therefore appear
+  under several spellings, and two different songwriters can share a name.
+- **Record**: one of those registered writer entries: a name as it was typed, with its IPI name number if it has one,
+  and the songs (works) registered under it.
+- **IPI name number**: an 11-digit number that identifies a songwriter or publisher to collecting societies, such as
+  `00338980326`. Many records have none, and one person can have several.
+  [More about IPI name numbers](https://songlinks.io/guides/ipi-name-numbers).
+- **Work**: a song as a composition (the melody and lyrics), as opposed to a particular recording of it.
+- **ISWC**: the international code for a work, such as `T0719661581`. Not every registered work has one.
+- **Person** and **person ID**: Songlinks groups the records it judges to be one human into a person and gives them a
+  person ID, such as `SLP-ZYM7-GD3E-S`. Every person has a page, such as
+  [songlinks.io/person/SLP-ZYM7-GD3E-S](https://songlinks.io/person/SLP-ZYM7-GD3E-S).
+- **Candidate**: what a lookup by name returns: the records that name reaches, grouped into people for that one
+  question. A candidate usually matches one person ID, but it is worked out fresh each time.
+- **Evidence**: why two records were grouped: the same IPI name number, or a judgement that they are the same person
+  (for example, the same co-writers and publishers).
+- **Rejected**: a lookup that gave no candidates, with a reason, such as a one-word name (`madonna`) that matches too
+  many people to group. It is an answer, not an error.
+
+Programming words:
+
+- **API**: a service that programs talk to over the internet. The Songlinks API answers questions such as "who is
+  this songwriter?".
+- **SDK**: this library. It does the talking to the API for you, so your code calls a function instead of building
+  web requests by hand.
+- **Rate limit**: the most requests the API accepts from one internet address in a stretch of time: about 100 every
+  5 minutes, or 20 from VPNs and cloud servers. Over it, the SDK tells you how long to wait.
+- **Maven** and **dependency**: Maven is the tool Java projects use to build and to fetch libraries; a dependency is a library your project uses, such as this one, listed in its `pom.xml`.
+
 ## Checking a whole roster?
 
 The API answers one name at a time, which suits an app. If you administer a catalogue, send us the writers instead.
@@ -115,9 +213,7 @@ The examples are compiled in CI against the SDK, so one that misreads a field fa
 
 ### Reading an answer
 
-Two words come up throughout. A **person** is a songwriter Songlinks has given a person ID (`SLP-…`), with the
-registrations it holds as theirs; `person()` reads one. A **candidate** is what a lookup returns: the registrations
-that one name reaches, grouped fresh for that query.
+A **person** and a **candidate** are different things: see [the words used here](#the-words-used-here).
 
 - **A candidate can count more works than its person.** "mark hoppus" reaches two registrations, 302 works between
   them; the person `SLP-ZYM7-GD3E-S` holds one of them as theirs (294 works) and lists the other in `possible()`.
@@ -138,6 +234,8 @@ Every non-success answer throws an unchecked `SonglinksException` with the HTTP 
 `error` field, the one to branch on), a message for people, and the answer's `body()` as JSON.
 
 ```java
+// Continuing from the code above, where `songlinks` was created.
+String personId = "SLP-0000-0000-0";  // an ID no one holds, to see the not-found branch
 try {
     songlinks.person(personId);
 } catch (PersonWithdrawnException e) {

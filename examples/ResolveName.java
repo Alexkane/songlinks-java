@@ -15,7 +15,9 @@ public class ResolveName {
 
         if ("rejected".equals(answer.answer())) {
             // Not an error: the API explains why it gave no candidates, such as a name too common to group.
-            System.out.println("No answer: " + answer.rejection().code() + " - nearest: " + answer.rejection().nearest());
+            System.out.println("No answer: " + answer.rejection().code());
+            // nearest() suggests registered names close to the one asked, when there are any.
+            if (!answer.rejection().nearest().isEmpty()) System.out.println("Did you mean: " + answer.rejection().nearest());
             return;
         }
         for (Cluster person : answer.candidates()) {
