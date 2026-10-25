@@ -5,14 +5,14 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
- * One registration record: a name as it was registered, with its society number if it has one.
+ * One registration record: a name as it was registered, with its IPI name number if it has one.
  *
  * @param partyRecordId Identifies this record in the registration data. Not a person ID: one person usually has
  *     several records.
  * @param name The name as registered.
  * @param keyName The part of the name the record is filed under, usually the surname.
  * @param namesBeforeKeyName The rest of the name, usually given names.
- * @param ipiNameNumber The society (IPI) name number, or null when the record has none.
+ * @param ipiNameNumber The IPI name number, or null when the record has none.
  * @param works Works registered under this record.
  * @param persistentId The person ID this record belongs to, or null. It can differ from the candidate's
  *     {@code persistentId()} when this lookup groups a record that the stored person does not hold.

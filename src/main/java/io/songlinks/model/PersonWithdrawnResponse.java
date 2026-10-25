@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 /**
- * HTTP 410: this ID was issued and later withdrawn. The number will never be issued to anyone else.
+ * HTTP 410: this ID was issued and later withdrawn. This person ID will never be issued to anyone else.
  *
  * @param personId The withdrawn ID.
  * @param state Always {@code withdrawn}.

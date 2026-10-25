@@ -11,12 +11,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param name The name as registered; null only if the record is no longer in the registration data.
  * @param keyName The part of the name the record is filed under, usually the surname.
  * @param namesBeforeKeyName The rest of the name, usually given names.
- * @param ipiNameNumber The society (IPI) name number, or null.
+ * @param ipiNameNumber The IPI name number, or null.
  * @param works This record's own works, counted once each.
  * @param link {@code anchor}: the record the ID was issued on. {@code asserted}: a member. {@code possible}:
  *     perhaps this person, but not a member.
- * @param rule Why the record was linked: {@code same_ipi} (the same society number as a member), {@code ipi} (the
- *     anchor's own society number), {@code model} (the model's judgement), {@code corroborated} (confirmed by an
+ * @param rule Why the record was linked: {@code same_ipi} (the same IPI name number as a member), {@code ipi} (the
+ *     anchor's own IPI name number), {@code model} (the model's judgement), {@code corroborated} (confirmed by an
  *     independent outside source) or {@code verdict} (decided by a person).
  * @param score The model's calibrated probability, where the model was involved.
  * @param decidedBy {@code build} for an automatic build; otherwise who decided.

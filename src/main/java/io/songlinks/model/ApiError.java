@@ -5,7 +5,9 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
- * The body of a 400, 404, 500 or 503 response. It never carries detail about what failed.
+ * The body of a 400, 404, 500 or 503 response. It never carries detail about what failed. A malformed parameter (an
+ * empty name, a threshold out of range) is answered 422 instead, with a {@code detail} list saying which parameter
+ * and why.
  *
  * @param error {@code too_many} or {@code no_numbers} (400), {@code not_found} (404), {@code internal} (500), or
  *     {@code not_ready} or {@code busy} (503). Branch on this.

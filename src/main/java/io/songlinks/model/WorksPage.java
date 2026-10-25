@@ -6,7 +6,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 /**
- * One page of the person's works, most-recorded first.
+ * One page of the person's works: most-recorded first when recording counts are available (see
+ * {@code orderedBy()}).
  *
  * @param total All the person's works: distinct works across member records, a work under two of them counted once.
  * @param offset The position of the first work on this page.

@@ -9,9 +9,10 @@ import java.util.List;
  * The answer to one lookup. Check {@code answer} first.
  *
  * @param query The question answered.
- * @param answer {@code candidates}, or {@code rejected}, in which case {@code rejection} says why.
+ * @param answer Either {@code candidates} or {@code rejected}. When it is {@code rejected}, {@code rejection} says
+ *     why.
  * @param rejection Why the lookup stopped; null unless {@code answer} is {@code rejected}.
- * @param candidates One entry per person.
+ * @param candidates The people the name could be, one entry each; empty when {@code answer} is {@code rejected}.
  * @param review Pairs of records held apart; never part of a candidate.
  * @param links Records registered under another name next to this lookup's. Filled only when the lookup's routes
  *     include {@code catalogue}, the default.
@@ -23,7 +24,8 @@ import java.util.List;
  * @param personsResolved How many candidates carry a person ID.
  * @param songMatch Which candidates wrote the song; null unless a {@code song} was sent and the lookup found
  *     candidates.
- * @param rateLimit Your remaining allowance; null when no per-caller limit is in force.
+ * @param rateLimit Your remaining allowance; null when no per-caller limit is in force. The edge's per-address
+ *     limit (about 100 requests per 5 minutes, 20 from VPNs and hosting networks) is separate and not counted here.
  * @param provenance What produced this answer.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)

@@ -11,7 +11,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param message A sentence you can show.
  * @param limit Requests allowed per window.
  * @param windowSeconds The length of the window, in seconds.
- * @param retryAfterSeconds How long to wait; also sent as the {@code Retry-After} header.
+ * @param retryAfterSeconds The most you need to wait, in seconds. The API's own limit also sends it as the
+ *     {@code Retry-After} header; the edge's per-address limit sends it only here.
  * @param lookupsUsed Requests counted in the current window.
  * @param contact Where to ask for more.
  */

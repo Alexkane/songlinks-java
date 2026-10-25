@@ -16,16 +16,18 @@ import java.util.List;
  *     not store it. False: a released ID. Null when there is no ID.
  * @param personState The stored person's {@code state}; null when there is no ID.
  * @param redirectedFrom When a record's ID has since been merged into this one, that older ID.
- * @param personRecords How many member records the stored person holds; null when there is no ID.
+ * @param personRecords How many registrations the stored person holds as theirs (its member records); null when
+ *     there is no ID.
  * @param recordsNotInThisAnswer Member records the stored person holds that this lookup did not reach. Read the
  *     person to see them.
  * @param names Every distinct registered name in {@code records}.
- * @param ipiNameNumbers Every distinct society number in {@code records}.
+ * @param ipiNameNumbers Every distinct IPI name number in {@code records}.
  * @param works Distinct works across {@code records}: a work registered under two of them counts once, so this can
- *     be less than their sum.
+ *     be less than their sum. It counts every record this lookup grouped, so it can be more than the stored
+ *     person's own {@code works}, which counts only the records the person ID holds.
  * @param records The registration records grouped into this person, most works first.
  * @param evidence One entry per pair of records joined.
- * @param mainIpiNameNumber The society number most of this person's works are registered under: the one whose
+ * @param mainIpiNameNumber The IPI name number most of this person's works are registered under: the one whose
  *     records hold the most works. Null when no record has one.
  * @param worksOnMainIpi Distinct works on the records carrying {@code mainIpiNameNumber()}. {@code works} minus
  *     this is how many works are held only by the person's other registrations, under another number or none. Null

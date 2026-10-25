@@ -10,7 +10,7 @@ import java.util.Map;
  * Why two records in a candidate were joined.
  *
  * @param records The two records joined, by {@code partyRecordId()}.
- * @param rule {@code same_ipi_name_number}: both records carry the same society number. {@code model}: the model
+ * @param rule {@code same_ipi_name_number}: both records carry the same IPI name number. {@code model}: the model
  *     judged them to be the same person.
  * @param probability The model's calibrated probability that the two records are one person, from 0 to 1.
  * @param shared What the two records have in common, under {@code co_writers}, {@code publishers} and

@@ -6,17 +6,18 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 /**
- * A stored person: what the ID holds, not a fresh lookup. {@code records} are members. {@code possible} records are
- * not members, are never counted, and may belong to someone else.
+ * A stored person: what a person ID holds, not a fresh lookup. {@code records} are its members, the registrations
+ * the ID holds as this person's. {@code possible} lists registrations that may also be theirs; they are not
+ * members, are never counted in {@code works}, and may belong to someone else.
  *
  * @param personId {@code SLP-XXXX-XXXX-C}; the last character is a check character.
  * @param prerelease True: the ID may stop resolving, or later point at a different person, without notice, so do
  *     not store it. False: a released ID.
  * @param state {@code active}. {@code split}: part of the group was separated and this ID kept the anchor.
  *     {@code anchor_missing}: the anchor record is no longer in the registration data; the ID stays.
- * @param evidence What the ID qualifies on now: {@code same_ipi} (members share a society number), {@code ipi} (the
- *     anchor's society number and catalogue), {@code corroborated} (a member's society number confirmed by an
- *     independent outside source) or {@code human} (decided by a person). It can change after issue;
+ * @param evidence What the ID qualifies on now: {@code same_ipi} (members share a IPI name number), {@code ipi}
+ *     (the anchor's IPI name number and catalogue), {@code corroborated} (a member's IPI name number confirmed by
+ *     an independent outside source) or {@code human} (decided by a person). It can change after issue;
  *     {@code issuedEvidence()} is what it was issued on.
  * @param issuedEvidence What the ID was issued on, one of the {@code evidence} values, from its history. Null when
  *     the history does not record it.
@@ -26,12 +27,11 @@ import java.util.List;
  * @param mergedFrom IDs merged into this one; each redirects here.
  * @param name The name to show for this person.
  * @param names Every distinct registered name among the members.
- * @param ipiNameNumbers Every distinct society number among the members.
+ * @param ipiNameNumbers Every distinct IPI name number among the members.
  * @param works Distinct works across member records; {@code possible} records are not counted.
- * @param mainIpiNameNumber This person's main society number: the one on the record their ID was created around
- *     ({@code link} {@code anchor}), which never changes. Usually the number most of their works are under; a
- *     record with another number may hold more (since 2026-09-15 such a record joins only on a person's verdict;
- *     earlier IDs can hold ones the model joined, {@code rule} {@code model}). Null when no member has one.
+ * @param mainIpiNameNumber This person's main IPI name number: the one on the record their ID was created around
+ *     (the record whose {@code link} is {@code anchor}). It never changes. It is usually, but not always, the
+ *     number most of their works are under. Null when no member has one.
  * @param worksOnMainIpi Distinct works on the member records carrying {@code mainIpiNameNumber()}. {@code works}
  *     minus this is how many works only the person's other registrations hold. Null when
  *     {@code mainIpiNameNumber()} is.
@@ -40,7 +40,8 @@ import java.util.List;
  * @param worksList One page of works. For the next page, pass {@code worksList().nextOffset()} to
  *     {@code Songlinks.person(id, offset, limit)}, or read them all with {@code Songlinks.personWorks(id)}.
  * @param history Every change to this ID, oldest first.
- * @param rateLimit Your remaining allowance; null when no per-caller limit is in force.
+ * @param rateLimit Your remaining allowance; null when no per-caller limit is in force. The edge's per-address
+ *     limit (about 100 requests per 5 minutes, 20 from VPNs and hosting networks) is separate and not counted here.
  * @param provenance What grouped these records, and what served the response.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)

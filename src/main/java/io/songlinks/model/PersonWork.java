@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 /**
- * One work registered under a member record.
+ * One work registered under one or more of the person's member records (the registrations the ID holds).
  *
  * @param mlcWorkId Identifies the work in the registration data.
  * @param title The registered title.

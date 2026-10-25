@@ -10,9 +10,9 @@ import java.util.List;
  * example. A different claim from a candidate: nothing here is joined, and its works are not counted in
  * {@code works}.
  *
- * @param partyRecordId The linked record.
+ * @param partyRecordId The linked record, by {@code partyRecordId()}.
  * @param name The linked record's registered name.
- * @param ipiNameNumber The linked record's society number, or null.
+ * @param ipiNameNumber The linked record's IPI name number, or null.
  * @param grade {@code checked}: the two people share no registered work, so the link is not a co-writer's.
  *     {@code co-writers too}: they share works, as bandmates do, and the link is weaker.
  * @param steps How close together the two records were registered; 1 is adjacent.

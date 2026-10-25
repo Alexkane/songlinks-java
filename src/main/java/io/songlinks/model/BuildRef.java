@@ -7,14 +7,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 /**
  * A build: the automatic run that groups records into people and issues IDs.
  *
- * @param buildId Identifies the build.
+ * @param buildId The build's number.
  * @param status The build's status, such as {@code applied}.
  * @param environment Where the build ran.
  * @param startedAt When the build started, in ISO 8601.
  * @param finishedAt When the build finished, in ISO 8601, or null if it has not finished.
  * @param modelVersion Identifies the model the build used.
  * @param codeCommit Identifies the code the build ran.
- * @param codeDirty True if the build ran with uncommitted changes.
+ * @param codeDirty True if the build ran with uncommitted changes; diagnostic.
  * @param mlcSnapshot The date of the registration-data release the build read, YYYY-MM-DD. Null when that load is
  *     undated: never a guess.
  */

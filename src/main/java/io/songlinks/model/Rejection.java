@@ -11,7 +11,7 @@ import java.util.List;
  * @param code {@code single-token}: the name is one word, which is not searched. {@code no-match}: nothing matched
  *     closely enough. {@code publishers-only}: every match is registered only as a publisher or administrator, not
  *     as a writer.
- * @param nearest Up to five registered names closest to the one asked for, as spelling suggestions.
+ * @param nearest Up to five registered names closest to the one asked for, as spelling suggestions; often empty.
  * @param setAsideRoles For {@code publishers-only}, the roles of the records set aside: {@code publisher},
  *     {@code administrator}, or both.
  */

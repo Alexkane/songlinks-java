@@ -14,11 +14,11 @@ import java.util.List;
  *     none is chosen. {@code none}: no person here holds it; it may belong to a publisher, or its records have not
  *     been grouped. {@code invalid}: not an IPI name number (up to 11 digits; spaces and dashes are ignored).
  * @param personId The person's ID, {@code SLP-XXXX-XXXX-C}; null unless {@code status} is {@code person}.
- * @param name The name to show for the person.
+ * @param name The name to show for the person; null unless {@code status} is {@code person}.
  * @param names Every distinct name the person's records are registered under, {@code name} first. Compare a
  *     spelling you hold against it: a spelling not in this list is not one this person is registered under. Empty
  *     unless {@code status} is {@code person}.
- * @param works Distinct works across the person's records.
+ * @param works Distinct works across the person's records; null unless {@code status} is {@code person}.
  * @param mainIpiNameNumber The person's main number: the one on the record their ID was created around. It can
  *     differ from {@code ipiNameNumber()}: the number sent may be a secondary one.
  * @param worksOnMainIpi Distinct works on the records carrying {@code mainIpiNameNumber()}.
