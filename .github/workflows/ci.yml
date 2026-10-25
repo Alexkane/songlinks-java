@@ -18,4 +18,6 @@ jobs:
           distribution: temurin
           java-version: ${{ matrix.java }}
           cache: maven
-      - run: ./mvnw -B verify
+      - run: ./mvnw -B verify dependency:build-classpath -Dmdep.outputFile=target/classpath.txt
+      # The examples compile against the SDK just built, so one that misreads a field fails the build.
+      - run: javac -Xlint:all -Werror -d target/examples -cp "target/classes:$(cat target/classpath.txt)" examples/*.java

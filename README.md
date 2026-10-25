@@ -63,6 +63,25 @@ SongMatch match = songlinks.lookup("amy allen", LookupOptions.song("espresso")).
 songlinks.personWorks("SLP-ZYM7-GD3E-S").forEach(w -> System.out.println(w.title()));
 ```
 
+## Examples
+
+Runnable programs for the jobs people use Songlinks for, each under 40 lines. Copy one and change it:
+
+| Program | What it does |
+| --- | --- |
+| [`ResolveName.java`](examples/ResolveName.java) | Every person a name could be, with their registrations and what joined them. |
+| [`WhichNamesake.java`](examples/WhichNamesake.java) | Two writers share a name: which one wrote this song? |
+| [`CheckRoster.java`](examples/CheckRoster.java) | A list of IPI name numbers in, CSV out: who holds each and their works. |
+| [`ExportCatalogue.java`](examples/ExportCatalogue.java) | Every work of a person, as CSV. |
+
+From a checkout, `scripts/run-example.sh` builds the SDK once and runs any of them:
+
+```sh
+scripts/run-example.sh CheckRoster roster.txt > checked.csv
+```
+
+The examples are compiled in CI against the SDK, so one that misreads a field fails the build.
+
 ## What it covers
 
 | Method | API | What it answers |
