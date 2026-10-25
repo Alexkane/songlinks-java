@@ -13,6 +13,6 @@ public class ExportCatalogue {
     }
 
     private static String csv(String value) {
-        return "\"" + value.replace("\"", "\"\"") + "\"";
+        return value == null ? "" : "\"" + value.replace("\"", "\"\"") + "\"";
     }
 }

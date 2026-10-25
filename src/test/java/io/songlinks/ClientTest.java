@@ -185,9 +185,70 @@ class ClientTest {
     }
 
     @Test
-    void backoffHonoursRetryAfterUpToAMinute() {
+    void backoffHonoursRetryAfter() {
         assertEquals(Duration.ofSeconds(7), Songlinks.backoff(0, Duration.ofSeconds(7)));
-        assertEquals(Duration.ofMinutes(1), Songlinks.backoff(0, Duration.ofMinutes(5)));
         assertFalse(Songlinks.backoff(1, null).isNegative());
+    }
+
+    @Test
+    void theEdgesLongWaitInTheBodyIsThrownAtOnce() {
+        replies.add(Reply.json(429, "{\"error\":\"rate_limited\",\"message\":\"Too many\",\"retry_after_seconds\":300}"));
+        RateLimitedException e = assertThrows(RateLimitedException.class, () -> client(2).lookup("x y"));
+        assertEquals(Duration.ofSeconds(300), e.retryAfter().orElseThrow());
+        assertEquals(1, requests.size());
+    }
+
+    @Test
+    void aShortWaitInTheBodyIsWaitedOut() {
+        replies.add(Reply.json(429, "{\"retry_after_seconds\":0}"));
+        replies.add(Reply.json(200, "{\"version\":\"0.11.0\",\"model_md5\":\"m\",\"code_commit\":\"c\","
+                + "\"threshold\":0.85,\"review_threshold\":0.5,\"max_candidates\":15,\"latency_ms\":0}"));
+        assertEquals("0.11.0", client(2).version().version());
+        assertEquals(2, requests.size());
+    }
+
+    @Test
+    void a503AskingForMoreThanAMinuteIsThrownAtOnce() {
+        replies.add(new Reply(503, "{\"error\":\"busy\",\"message\":\"Busy.\"}", Map.of("Retry-After", "120")));
+        SonglinksException e = assertThrows(SonglinksException.class, () -> client(2).version());
+        assertEquals(503, e.status());
+        assertEquals(1, requests.size());
+    }
+
+    @Test
+    void theHeaderWinsOverTheBody() {
+        replies.add(new Reply(429, "{\"retry_after_seconds\":300}", Map.of("Retry-After", "0")));
+        replies.add(Reply.json(200, "{\"version\":\"0.11.0\",\"model_md5\":\"m\",\"code_commit\":\"c\","
+                + "\"threshold\":0.85,\"review_threshold\":0.5,\"max_candidates\":15,\"latency_ms\":0}"));
+        assertEquals("0.11.0", client(2).version().version());
+        assertEquals(2, requests.size());
+    }
+
+    @Test
+    void a422SaysWhichParameterWasWrong() {
+        replies.add(Reply.json(422, "{\"detail\":[{\"loc\":[\"query\",\"threshold\"],"
+                + "\"msg\":\"Input should be less than or equal to 0.99\"}]}"));
+        SonglinksException e = assertThrows(SonglinksException.class,
+                () -> client(0).lookup("x y", LookupOptions.defaults().withThreshold(2)));
+        assertEquals("invalid_request", e.code());
+        assertEquals("threshold: Input should be less than or equal to 0.99", e.getMessage());
+    }
+
+    @Test
+    void aBlankNameOrIdIsRefusedBeforeAnyRequest() {
+        assertThrows(IllegalArgumentException.class, () -> client(0).lookup(" "));
+        assertThrows(IllegalArgumentException.class, () -> client(0).person(""));
+        assertThrows(IllegalArgumentException.class, () -> client(0).personWorks(" "));
+        assertEquals(0, requests.size());
+    }
+
+    @Test
+    void normalizeIpiWritesANumberTheWayTheAnswerDoes() {
+        assertEquals("00338980326", Songlinks.normalizeIpi("338980326"));
+        assertEquals("00338980326", Songlinks.normalizeIpi("003-389-803 26"));
+        assertEquals("00338980326", Songlinks.normalizeIpi("\t003\u2013389803 26")); // a tab and an en dash
+        assertEquals("abc", Songlinks.normalizeIpi(" abc ")); // invalid: echoed trimmed, as the API does
+        assertEquals("15036818.0", Songlinks.normalizeIpi("15036818.0"));
+        assertEquals("123456789012", Songlinks.normalizeIpi("123456789012"));
     }
 }

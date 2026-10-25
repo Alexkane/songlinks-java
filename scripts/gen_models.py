@@ -35,6 +35,9 @@ NAMES = {
 }
 # Integers that are identifiers, read as long so no future id outgrows int.
 LONG_FIELDS = {"party_record_id", "build_id", "from_record"}
+# Lists of record IDs, read as List<Long> to match partyRecordId(): with List<Integer>,
+# work.records().contains(record.partyRecordId()) boxes a Long and is silently false for a record that is there.
+LONG_LISTS = {("Evidence", "records"), ("ReviewItem", "records"), ("PersonWork", "records")}
 
 
 def camel(snake: str) -> str:
@@ -137,6 +140,8 @@ def render(schema_name: str, schema: dict) -> str:
     fields = []
     for json_name, prop in schema.get("properties", {}).items():
         jt = java_type(prop, json_name, json_name in required)
+        if (schema_name, json_name) in LONG_LISTS:
+            jt = "List<Long>"
         fields.append((json_name, camel(json_name), jt, prop.get("description")))
     lists = [f for f in fields if f[2].startswith("List<")]
     imports = ["com.fasterxml.jackson.annotation.JsonIgnoreProperties", "com.fasterxml.jackson.annotation.JsonProperty"]

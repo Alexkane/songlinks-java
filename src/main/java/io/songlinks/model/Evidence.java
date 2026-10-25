@@ -20,7 +20,7 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record Evidence(
-        @JsonProperty("records") List<Integer> records,
+        @JsonProperty("records") List<Long> records,
         @JsonProperty("rule") String rule,
         @JsonProperty("probability") Double probability,
         @JsonProperty("shared") Map<String, Object> shared) {

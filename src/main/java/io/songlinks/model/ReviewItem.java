@@ -27,7 +27,7 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ReviewItem(
-        @JsonProperty("records") List<Integer> records,
+        @JsonProperty("records") List<Long> records,
         @JsonProperty("refs") List<String> refs,
         @JsonProperty("reason") String reason,
         @JsonProperty("probability") Double probability,

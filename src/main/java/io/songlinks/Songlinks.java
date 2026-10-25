@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.regex.Pattern;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.ThreadLocalRandom;
@@ -46,6 +47,8 @@ public final class Songlinks {
     public static final int WRITERS_MAX = 50;
     /** The most works one person read returns; {@link #personWorks} pages through the rest. */
     public static final int WORKS_PAGE_MAX = 200;
+    /** The longest wait the client sleeps through before retrying; a longer one is thrown to the caller at once. */
+    private static final Duration MAX_WAIT = Duration.ofMinutes(1);
 
     private static final ObjectMapper JSON = new ObjectMapper()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -89,9 +92,12 @@ public final class Songlinks {
     /**
      * Looks up a songwriter by name.
      *
-     * @param name a songwriter's full name, such as {@code mark hoppus}
-     * @return the people the name could be, each with the registrations behind them
-     * @throws SonglinksException when the API answers with an error
+     * @param name a songwriter's full name, such as {@code mark hoppus}. A single word, such as {@code madonna}, is
+     *             answered with {@code answer()} {@code "rejected"} (code {@code single-token}), since one word matches
+     *             too many people to group.
+     * @return the people the name could be, each with the registrations behind them. Check {@code answer()} first.
+     * @throws IllegalArgumentException when the name is blank
+     * @throws SonglinksException       when the API answers with an error
      */
     public LookupResponse lookup(String name) {
         return lookup(name, LookupOptions.defaults());
@@ -102,11 +108,14 @@ public final class Songlinks {
      *
      * @param name    a songwriter's full name, such as {@code mark hoppus}
      * @param options the song, threshold or routes to use; any left null are decided by the API
-     * @return the people the name could be, each with the registrations behind them
-     * @throws SonglinksException when the API answers with an error
+     * @return the people the name could be, each with the registrations behind them. Check {@code answer()} first.
+     * @throws IllegalArgumentException when the name is blank
+     * @throws SonglinksException       when the API answers with an error, such as {@code invalid_request} for a
+     *                                  threshold out of range
      */
     public LookupResponse lookup(String name, LookupOptions options) {
         Objects.requireNonNull(name, "name");
+        if (name.isBlank()) throw new IllegalArgumentException("lookup() needs a name");
         Map<String, String> q = new LinkedHashMap<>();
         q.put("name", name);
         if (options.song() != null) q.put("song", options.song());
@@ -122,7 +131,9 @@ public final class Songlinks {
      * @param personId a person ID, such as {@code SLP-ZYM7-GD3E-S}
      * @return the stored person: their registrations, names, IPI name numbers and works
      * @throws PersonWithdrawnException when the ID has been withdrawn
-     * @throws SonglinksException       when the API answers with any other error, such as {@code not_found}
+     * @throws IllegalArgumentException when the ID is blank
+     * @throws SonglinksException       when the API answers with any other error, such as {@code not_found} for an
+     *                                  unknown ID
      */
     public PersonResponse person(String personId) {
         return person(personId, null, null);
@@ -132,14 +143,18 @@ public final class Songlinks {
      * Reads a person by ID, with one chosen page of their works.
      *
      * @param personId    a person ID, such as {@code SLP-ZYM7-GD3E-S}
-     * @param worksOffset the position of the first work to return, from 0; null for the first page
-     * @param worksLimit  how many works to return, from 1 to 200; null for the API's default
+     * @param worksOffset the position of the first work to return, from 0; null for 0. An offset past the last work
+     *                    returns an empty page whose {@code nextOffset()} is null.
+     * @param worksLimit  how many works to return, from 1 to 200; null for the API's default of 100
      * @return the stored person, with the requested page of works
+     * @throws IllegalArgumentException when the ID is blank
      * @throws PersonWithdrawnException when the ID has been withdrawn
-     * @throws SonglinksException       when the API answers with any other error
+     * @throws SonglinksException       when the API answers with any other error, such as {@code not_found}
      */
     public PersonResponse person(String personId, Integer worksOffset, Integer worksLimit) {
         Objects.requireNonNull(personId, "personId");
+        // A blank ID would ask for /v1/person/, which is a different route and answers a bare 404.
+        if (personId.isBlank()) throw new IllegalArgumentException("person() needs a person ID");
         Map<String, String> q = new LinkedHashMap<>();
         if (worksOffset != null) q.put("works_offset", String.valueOf(worksOffset));
         if (worksLimit != null) q.put("works_limit", String.valueOf(worksLimit));
@@ -152,7 +167,9 @@ public final class Songlinks {
      *
      * @param personId a person ID, such as {@code SLP-ZYM7-GD3E-S}
      * @return the person's works, 200 to a request
-     * @throws SonglinksException when the API answers with an error while the stream is read
+     * @throws IllegalArgumentException when the ID is blank, at once rather than when the stream is read
+     * @throws PersonWithdrawnException when the ID has been withdrawn, while the stream is read
+     * @throws SonglinksException       when the API answers with any other error while the stream is read
      */
     public Stream<PersonWork> personWorks(String personId) {
         return personWorks(personId, WORKS_PAGE_MAX);
@@ -164,9 +181,13 @@ public final class Songlinks {
      * @param personId a person ID, such as {@code SLP-ZYM7-GD3E-S}
      * @param pageSize how many works to request at a time, from 1 to 200
      * @return the person's works
-     * @throws SonglinksException when the API answers with an error while the stream is read
+     * @throws IllegalArgumentException when the ID is blank, at once rather than when the stream is read
+     * @throws PersonWithdrawnException when the ID has been withdrawn, while the stream is read
+     * @throws SonglinksException       when the API answers with any other error while the stream is read
      */
     public Stream<PersonWork> personWorks(String personId, int pageSize) {
+        Objects.requireNonNull(personId, "personId");
+        if (personId.isBlank()) throw new IllegalArgumentException("personWorks() needs a person ID");
         Iterator<PersonWork> works = new Iterator<>() {
             private Iterator<PersonWork> page = List.<PersonWork>of().iterator();
             private Integer nextOffset = 0;
@@ -194,8 +215,13 @@ public final class Songlinks {
      * Checks up to 50 IPI name numbers at once. The API refuses a longer list rather than shortening it, and so does
      * this method: for more, call it once for each batch of {@link #WRITERS_MAX}.
      *
-     * @param ipiNameNumbers the numbers to check; leading zeros may be left off
-     * @return for each number, the stored person who holds it and a status
+     * <p>The answer has one entry per distinct number, in the order each was first sent, written as 11 digits. Two
+     * forms of one number ({@code 338980326} and {@code 00338980326}) and repeats come back as one entry, so match
+     * answers to your list by number, not by position: {@link #normalizeIpi(String)} turns your input into the form the
+     * answer uses.
+     *
+     * @param ipiNameNumbers the numbers to check. Leading zeros may be left off, and spaces and dashes are ignored.
+     * @return for each distinct number, the person who holds it and a status, with totals in {@code summary()}
      * @throws IllegalArgumentException when the list is empty or holds more than 50 numbers
      * @throws SonglinksException       when the API answers with an error
      */
@@ -216,6 +242,29 @@ public final class Songlinks {
     public VersionResponse version() {
         return get("/v1/version", Map.of(), VersionResponse.class);
     }
+
+    /**
+     * Writes an IPI name number the way {@link #writers(List)} answers do, so the answers can be matched to the numbers
+     * you sent. Spaces and dashes (including the typographic dashes a spreadsheet substitutes) are dropped, and a run of
+     * 1 to 11 digits is padded with leading zeros to 11: {@code 338980326} and {@code 003-389-803 26} both become
+     * {@code 00338980326}. Anything else is not an IPI name number, and is returned trimmed (to 32 characters), as the
+     * API echoes it with status {@code invalid}. A dot is not a separator: {@code 15036818.0} is what a spreadsheet
+     * makes of a number read as a float, and dropping the dot would turn it into somebody else's number.
+     *
+     * @param ipiNameNumber an IPI name number as you have it, such as {@code 338980326} or {@code 003-389-803-26}
+     * @return the number as 11 digits, such as {@code 00338980326}, or the trimmed input when it is not one
+     */
+    public static String normalizeIpi(String ipiNameNumber) {
+        // The same reading as the API's own (writer/service.py ipi_key).
+        String digits = IPI_SEPARATORS.matcher(ipiNameNumber).replaceAll("");
+        if (IPI_DIGITS.matcher(digits).matches()) return "0".repeat(11 - digits.length()) + digits;
+        String trimmed = ipiNameNumber.strip();
+        return trimmed.codePointCount(0, trimmed.length()) > 32
+                ? trimmed.substring(0, trimmed.offsetByCodePoints(0, 32)) : trimmed;
+    }
+
+    private static final Pattern IPI_SEPARATORS = Pattern.compile("[\\s\\-\\x{2010}-\\x{2015}\\x{2212}]");
+    private static final Pattern IPI_DIGITS = Pattern.compile("[0-9]{1,11}");
 
     private <T> T get(String path, Map<String, String> query, Class<T> type) {
         String qs = query.entrySet().stream()
@@ -252,23 +301,38 @@ public final class Songlinks {
                             + e.getMessage(), null);
                 }
             }
-            Duration retryAfter = parseRetryAfter(response.headers().firstValue("Retry-After").orElse(null));
-            if ((status == 429 || status == 503) && attempt < maxRetries) {
+            JsonNode body = readTree(response.body());
+            Duration retryAfter = retryAfterOf(response.headers().firstValue("Retry-After").orElse(null), body);
+            // A wait longer than a minute (the edge's rate limit asks for up to five) is the caller's to schedule,
+            // not something to block on inside one call, so it is thrown at once.
+            boolean waitable = retryAfter == null || retryAfter.compareTo(MAX_WAIT) <= 0;
+            if ((status == 429 || status == 503) && attempt < maxRetries && waitable) {
                 sleep(backoff(attempt, retryAfter));
                 continue;
             }
-            throw toException(status, response.body(), retryAfter);
+            throw toException(status, body, retryAfter);
         }
     }
 
-    private static SonglinksException toException(int status, String text, Duration retryAfter) {
-        JsonNode body = null;
+    private static JsonNode readTree(String text) {
         try {
-            body = text == null || text.isEmpty() ? null : JSON.readTree(text);
+            return text == null || text.isEmpty() ? null : JSON.readTree(text);
         } catch (IOException ignored) {
-            // Not JSON (a proxy's error page): the status alone says what happened.
+            return null; // Not JSON (a proxy's error page): the status alone says what happened.
         }
+    }
+
+    private static SonglinksException toException(int status, JsonNode body, Duration retryAfter) {
         String message = body != null && body.hasNonNull("message") ? body.get("message").asText() : "HTTP " + status;
+        // 422 is FastAPI's validation answer: no `error` or `message`, but a `detail` list saying which parameter was
+        // wrong and why. Its first entry becomes the message, so a threshold of 2 reads "threshold: Input should be
+        // less than or equal to 0.99" rather than "HTTP 422".
+        JsonNode detail = body == null ? null : body.path("detail").path(0);
+        if (status == 422 && detail != null && detail.hasNonNull("msg")) {
+            JsonNode loc = detail.path("loc");
+            String where = loc.isArray() && loc.size() > 0 ? loc.get(loc.size() - 1).asText() : null;
+            message = where != null ? where + ": " + detail.get("msg").asText() : detail.get("msg").asText();
+        }
         if (status == 429) return new RateLimitedException(message, body, retryAfter);
         if (status == 410 && body != null && body.hasNonNull("person_id")) {
             try {
@@ -277,25 +341,35 @@ public final class Songlinks {
                 // Falls through to the plain exception below.
             }
         }
-        // 422 is FastAPI's validation answer, with `detail` rather than `error`.
         String code = body != null && body.hasNonNull("error") ? body.get("error").asText()
                 : status == 422 ? "invalid_request" : "http_" + status;
         return new SonglinksException(status, code, message, body);
     }
 
-    private static Duration parseRetryAfter(String value) {
-        if (value == null) return null;
-        try {
-            long seconds = Long.parseLong(value.trim());
-            return seconds >= 0 ? Duration.ofSeconds(seconds) : null;
-        } catch (NumberFormatException e) {
-            return null;
+    /**
+     * The wait the API asked for: the Retry-After header, or else the body's {@code retry_after_seconds}. The edge's
+     * rate limit answers with the body only (its 429 carries no header), so reading the header alone would retry a
+     * five-minute limit after half a second.
+     */
+    private static Duration retryAfterOf(String header, JsonNode body) {
+        if (header != null) {
+            try {
+                long seconds = Long.parseLong(header.trim());
+                if (seconds >= 0) return Duration.ofSeconds(seconds);
+            } catch (NumberFormatException ignored) {
+                // Only the delta-seconds form is read: the API never sends an HTTP date.
+            }
         }
+        if (body != null && body.path("retry_after_seconds").isNumber()) {
+            double seconds = body.get("retry_after_seconds").asDouble();
+            if (seconds >= 0) return Duration.ofMillis((long) (seconds * 1000));
+        }
+        return null;
     }
 
-    /** Retry-After when the API gives one (capped at a minute), else 0.5 s, 1 s, 2 s ... with jitter. */
+    /** The API's requested wait when it gives one, else 0.5 s, 1 s, 2 s ... with jitter. */
     static Duration backoff(int attempt, Duration retryAfter) {
-        if (retryAfter != null) return retryAfter.compareTo(Duration.ofMinutes(1)) > 0 ? Duration.ofMinutes(1) : retryAfter;
+        if (retryAfter != null) return retryAfter;
         double ms = 500 * Math.pow(2, attempt) * (0.75 + ThreadLocalRandom.current().nextDouble() * 0.5);
         return Duration.ofMillis((long) ms);
     }
@@ -358,7 +432,8 @@ public final class Songlinks {
         }
 
         /**
-         * Sets how many times a request is retried after a 429, a 503 or a network failure.
+         * Sets how many times a request is retried after a 429, a 503 or a network failure. An answer asking for a
+         * wait longer than a minute is not retried: it is thrown at once.
          *
          * @param maxRetries the number of retries; the default is 2, and 0 turns retrying off
          * @return this builder

@@ -15,6 +15,14 @@ keeps apart the ones it isn't sure of.
 - **Built to be called from real services.** Typed exceptions, retries that honour `Retry-After`, lazy paging, and
   thread-safe: build one client and share it.
 
+**Not on Maven Central yet.** Until it is, install it from a checkout, which puts it in your local Maven repository:
+
+```sh
+git clone https://github.com/Alexkane/songlinks-java && cd songlinks-java && ./mvnw -q install -DskipTests
+```
+
+Then depend on it as usual:
+
 ```xml
 <dependency>
   <groupId>io.songlinks</groupId>
@@ -35,29 +43,35 @@ import java.util.List;
 Songlinks songlinks = Songlinks.builder().userAgent("my-app/1.0").build();
 
 LookupResponse answer = songlinks.lookup("mark hoppus");
-Cluster person = answer.candidates().get(0);
-// person.persistentId() = "SLP-ZYM7-GD3E-S", person.names() = [MARK HOPPUS],
-// person.ipiNameNumbers() = [00338980326], person.works() = 302, person.records(): 2 registrations
+if ("rejected".equals(answer.answer())) {  // for example a one-word name, which matches too many people
+    throw new IllegalStateException("no answer: " + answer.rejection().code());
+}
+Cluster candidate = answer.candidates().get(0);
+System.out.println(candidate.persistentId() + " " + candidate.names() + " " + candidate.works());
+// SLP-ZYM7-GD3E-S [MARK HOPPUS] 302
 
 songlinks.person("SLP-ZYM7-GD3E-S", 0, 3).worksList().items().forEach(w -> System.out.println(w.title()));
 // I MISS YOU / ALL THE SMALL THINGS / DOWN
 
 WritersResponse check = songlinks.writers(List.of("00338980326", "00340247397"));
-// one answer per IPI name number: MARK HOPPUS (SLP-ZYM7-GD3E-S), TRAVIS L BARKER (SLP-MG23-XM9B-Y)
+check.writers().forEach(w -> System.out.println(w.name() + " " + w.personId()));
+// MARK HOPPUS SLP-ZYM7-GD3E-S
+// TRAVIS L BARKER SLP-MG23-XM9B-Y
 ```
 
 Every person has a page you can link to, such as [songlinks.io/person/SLP-ZYM7-GD3E-S](https://songlinks.io/person/SLP-ZYM7-GD3E-S).
 It shows the registrations behind the person and what each join rests on.
 
-> **Beta.** Unverified machine output, from a dated snapshot of registration data (every answer's `mlcSnapshot` gives
-> its date). Some answers are wrong and some are incomplete. Not for rights or royalty decisions.
+> **Beta.** Unverified machine output, from a dated snapshot of registration data (a lookup's or a person's
+> `provenance().mlcSnapshot()` gives its date, and `version()` gives the current one). Some answers are wrong and some are incomplete. Not for rights or royalty decisions.
 
 ### More
 
 ```java
 // Which of several writers with the same name wrote a song? Pass one of their songs.
 SongMatch match = songlinks.lookup("amy allen", LookupOptions.song("espresso")).songMatch();
-// match.match() = "exact", match.candidates() = [c1]: the Amy Allen credited on that song
+// match.match() = "exact", match.candidates() = [c1]: the candidate whose ref() is "c1" is the Amy Allen credited
+// on that song
 
 // Every work of a person, read lazily, a page at a time.
 songlinks.personWorks("SLP-ZYM7-GD3E-S").forEach(w -> System.out.println(w.title()));
@@ -101,6 +115,16 @@ The examples are compiled in CI against the SDK, so one that misreads a field fa
 
 ### Reading an answer
 
+Two words come up throughout. A **person** is a songwriter Songlinks has given a person ID (`SLP-…`), with the
+registrations it holds as theirs; `person()` reads one. A **candidate** is what a lookup returns: the registrations
+that one name reaches, grouped fresh for that query.
+
+- **A candidate can count more works than its person.** "mark hoppus" reaches two registrations, 302 works between
+  them; the person `SLP-ZYM7-GD3E-S` holds one of them as theirs (294 works) and lists the other in `possible()`.
+  `person()` is the authority on what an ID holds.
+- **Match a writers check by number, not position.** Repeats and two forms of one number come back as one entry, as
+  11 digits. `Songlinks.normalizeIpi()` turns your input into the same form. Its `works()` and `name()` are null
+  unless `status()` is `"person"`.
 - **A lookup candidate is not a stored person.** It is the lookup's own grouping, made for the name you asked.
   `persistentId()` is the stored person when there is exactly one. A candidate whose records belong to more than one
   stored person has no `persistentId()` and lists them in `storedPersons()`. Read each record's own `persistentId()`.
@@ -115,18 +139,24 @@ Every non-success answer throws an unchecked `SonglinksException` with the HTTP 
 
 ```java
 try {
-    songlinks.person("SLP-0000-0000-0");
+    songlinks.person(personId);
 } catch (PersonWithdrawnException e) {
     System.out.println("withdrawn " + e.withdrawn().withdrawnAt()); // a 410, and a valid answer to keep
 } catch (RateLimitedException e) {
-    System.out.println("retry in " + e.retryAfter());
+    System.out.println("retry in " + e.retryAfter().map(d -> d.toSeconds() + " s").orElse("a few minutes"));
 } catch (SonglinksException e) {
-    System.out.println(e.status() + " " + e.code() + ": " + e.getMessage());
+    if ("not_found".equals(e.code())) {  // a 404, such as for SLP-0000-0000-0
+        System.out.println("no person with that ID");
+    } else {
+        System.out.println(e.status() + " " + e.code() + ": " + e.getMessage());
+    }
 }
 ```
 
-- **Retried automatically:** `429` and `503` answers and network failures, up to `maxRetries` times (default 2). A
-  `Retry-After` header is honoured, up to a minute; otherwise it backs off from half a second.
+- **Retried automatically:** `429` and `503` answers and network failures, up to `maxRetries` times (default 2).
+  When the API asks for a wait (in a `Retry-After` header or the body's `retry_after_seconds`) of a minute or less,
+  the client waits that long; otherwise it backs off from half a second.
+- **Thrown at once:** a requested wait longer than a minute, for you to schedule (`retryAfter()` on a 429).
 - **Never retried:** any other error.
 - **Merged person IDs** are followed to the person they now point at, and `redirectedFrom()` names the ID you asked for.
 
@@ -144,8 +174,10 @@ Songlinks songlinks = Songlinks.builder()
 
 ## Fair use
 
-The API is free and open. Please send a `userAgent` that names your app, keep to one request at a time per user
-action, and cache answers you reuse. A burst of lookups may be rate-limited; for a whole roster, see
+The API is free and open. It allows about 100 requests per 5 minutes from one address, across every endpoint, and 20
+from VPNs, proxies and hosting providers, which includes most cloud servers. Please send a `userAgent` that names your
+app, keep to one request at a time per user action, and cache answers you reuse. Over the limit, the SDK throws a
+`RateLimitedException` whose `retryAfter()` is the most you need to wait; for a whole roster, see
 [bulk songwriter lookup](https://songlinks.io/bulk-songwriter-lookup).
 
 ## Links

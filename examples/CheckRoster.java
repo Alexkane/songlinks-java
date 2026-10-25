@@ -25,8 +25,8 @@ public class CheckRoster {
 
         System.out.println("ipi,status,person_id,name,works");
         for (String ipi : ipis) {
-            // The API answers with the number in its full 11-digit form, so look it up the same way.
-            WriterAnswer w = answers.get("0".repeat(Math.max(0, 11 - ipi.length())) + ipi);
+            // The answer writes each number as 11 digits, with repeats merged, so look yours up in the same form.
+            WriterAnswer w = answers.get(Songlinks.normalizeIpi(ipi));
             if (w == null) {
                 System.out.println(ipi + ",,,,");
                 continue;

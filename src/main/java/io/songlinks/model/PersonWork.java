@@ -18,7 +18,7 @@ public record PersonWork(
         @JsonProperty("mlc_work_id") String mlcWorkId,
         @JsonProperty("title") String title,
         @JsonProperty("iswc") String iswc,
-        @JsonProperty("records") List<Integer> records) {
+        @JsonProperty("records") List<Long> records) {
 
     /** Lists the API leaves out arrive as empty lists, never null, and none can be modified. */
     public PersonWork {

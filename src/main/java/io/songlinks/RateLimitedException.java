@@ -5,8 +5,11 @@ import java.time.Duration;
 import java.util.Optional;
 
 /**
- * Thrown when the API refuses a request because the caller is over a limit (HTTP 429). The client retries these
- * itself, waiting as long as the API asks, and throws this only when its retries run out.
+ * Thrown when the API refuses a request because the caller is over a limit (HTTP 429). The public API allows about
+ * 100 requests per 5 minutes from one address, across every endpoint, and 20 from VPNs, proxies and hosting providers
+ * (which includes most cloud servers). When the API asks for a wait of a minute or less, the client waits and retries
+ * by itself and throws this only when its retries run out; a longer wait is thrown at once, with {@link #retryAfter()}
+ * the most you need to wait.
  */
 public class RateLimitedException extends SonglinksException {
     private static final long serialVersionUID = 1L;
