@@ -11,6 +11,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.songlinks.model.Cluster;
 import io.songlinks.model.LookupResponse;
 import io.songlinks.model.PersonResponse;
+import io.songlinks.model.RecordingAnswer;
+import io.songlinks.model.RecordingWork;
+import io.songlinks.model.SongwritersResponse;
 import io.songlinks.model.VersionResponse;
 import io.songlinks.model.WritersResponse;
 import java.io.IOException;
@@ -40,7 +43,9 @@ class ModelTest {
             Map.entry("BuildRef", "BuildRef"), Map.entry("PersonWithdrawnResponse", "PersonWithdrawnResponse"),
             Map.entry("WritersResponse", "WritersResponse"), Map.entry("WriterAnswer", "WriterAnswer"),
             Map.entry("WritersSummary", "WritersSummary"), Map.entry("VersionResponse", "VersionResponse"),
-            Map.entry("Error", "ApiError"), Map.entry("RateLimited", "RateLimited"));
+            Map.entry("Error", "ApiError"), Map.entry("RateLimited", "RateLimited"),
+            Map.entry("SongwritersResponse", "SongwritersResponse"), Map.entry("RecordingAnswer", "RecordingAnswer"),
+            Map.entry("RecordingWork", "RecordingWork"), Map.entry("RecordingWriter", "RecordingWriter"));
 
     private static JsonNode resource(String name) throws IOException {
         try (InputStream in = ModelTest.class.getResourceAsStream("/" + name)) {
@@ -111,6 +116,26 @@ class ModelTest {
         assertEquals(2, w.summary().numbers());
         VersionResponse v = fixture("version.json", VersionResponse.class);
         assertTrue(v.mlcSnapshot().matches("\\d{4}-\\d{2}-\\d{2}"));
+    }
+
+    /** A real answer for {@code isrc=USMC19959123,nope}: All the Small Things, and an entry that is not an ISRC. */
+    @Test
+    void aRealSongwritersAnswerReads() throws IOException {
+        SongwritersResponse r = fixture("songwriters.json", SongwritersResponse.class);
+        assertEquals(2, r.recordings().size());
+        RecordingAnswer found = r.recordings().get(0);
+        assertEquals("USMC19959123", found.isrc());
+        assertEquals("registered", found.status());
+        RecordingWork work = found.works().get(0);
+        assertEquals("ALL THE SMALL THINGS", work.title());
+        assertEquals("T0708835635", work.iswc());
+        assertTrue(work.writers().stream().anyMatch(w -> "SLP-ZYM7-GD3E-S".equals(w.persistentId())
+                && "00338980326".equals(w.ipiNameNumber()) && w.partyRecordId() > 0));
+        RecordingAnswer invalid = r.recordings().get(1);
+        assertEquals("nope", invalid.isrc());
+        assertEquals("invalid", invalid.status());
+        assertTrue(invalid.works().isEmpty());
+        assertNull(r.rateLimit());
     }
 
     @Test

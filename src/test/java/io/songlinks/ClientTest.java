@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -251,6 +252,58 @@ class ClientTest {
             assertThrows(IllegalArgumentException.class, () -> client(0).writers(List.of(bad)));
         }
         assertEquals(0, requests.size());
+    }
+
+    @Test
+    void songwritersJoinsWithCommasAndRefusesMoreThanTheApiTakes() {
+        replies.add(Reply.json(200, "{\"recordings\":[]}"));
+        Songlinks sl = client(0);
+        sl.songwriters(List.of("USMC19959123", "US-MC1-99-59123"));
+        assertEquals("/v1/songwriters", requests.get(0).getPath());
+        assertEquals("USMC19959123,US-MC1-99-59123", query(requests.get(0)).get("isrc"));
+        assertThrows(IllegalArgumentException.class, () -> sl.songwriters(Collections.nCopies(51, "USMC19959123")));
+        assertThrows(IllegalArgumentException.class, () -> sl.songwriters(List.of()));
+        assertEquals(1, requests.size());
+    }
+
+    @Test
+    void songwritersRefusesAnEntryTheApiWouldSplitButNotASpaceOrADash() {
+        for (String bad : List.of("USMC19959123,USMC19959124", "USMC19959123;x", "USMC19959123\nx",
+                "USMC1%2c9959123")) {
+            assertThrows(IllegalArgumentException.class, () -> client(0).songwriters(List.of(bad)));
+        }
+        assertThrows(IllegalArgumentException.class, () -> client(0).songwriters(java.util.Arrays.asList("x", null)));
+        assertEquals(0, requests.size());
+        // Spaces and dashes are inside an ISRC as people write it, and a trailing "\r" is a line from a Windows file.
+        replies.add(Reply.json(200, "{\"recordings\":[]}"));
+        client(0).songwriters(List.of("US MC1 99 59123", "US-MC1-99-59123\r"));
+        assertEquals("US MC1 99 59123,US-MC1-99-59123\r", query(requests.get(0)).get("isrc"));
+    }
+
+    @Test
+    void normalizeIsrcWritesAnIsrcTheWayTheAnswerDoes() {
+        assertEquals("USMC19959123", Songlinks.normalizeIsrc("USMC19959123"));
+        assertEquals("USMC19959123", Songlinks.normalizeIsrc("us-mc1-99-59123"));
+        assertEquals("USMC19959123", Songlinks.normalizeIsrc(" US MC1 99 59123\r"));
+        assertEquals("USMC19959123", Songlinks.normalizeIsrc("US\u00a0MC1\u00a099\u00a059123")); // non-breaking spaces
+        assertEquals("nope", Songlinks.normalizeIsrc(" nope ")); // invalid: echoed trimmed, as the API does
+        // The API drops only the ASCII hyphen, so an en dash leaves the entry invalid, echoed as sent.
+        assertEquals("US\u2013MC1\u20139959123", Songlinks.normalizeIsrc("US\u2013MC1\u20139959123"));
+        assertEquals("USMC1995912", Songlinks.normalizeIsrc("USMC1995912")); // eleven characters: one short
+        assertEquals("usmc1995912a", Songlinks.normalizeIsrc("usmc1995912a")); // not seven digits: echoed as sent
+        assertEquals("x".repeat(32), Songlinks.normalizeIsrc("x".repeat(40)));
+    }
+
+    @Test
+    void normalizeIsrcIgnoresTheDefaultLocale() {
+        Locale before = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR")); // where "i" upper-cases to a dotted capital I
+            assertEquals("GBAYE0601498", Songlinks.normalizeIsrc("gbaye0601498"));
+            assertEquals("ITXXX0601498", Songlinks.normalizeIsrc("itxxx0601498"));
+        } finally {
+            Locale.setDefault(before);
+        }
     }
 
     @Test

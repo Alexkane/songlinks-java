@@ -7,6 +7,7 @@ import io.songlinks.model.LookupResponse;
 import io.songlinks.model.PersonResponse;
 import io.songlinks.model.PersonWithdrawnResponse;
 import io.songlinks.model.PersonWork;
+import io.songlinks.model.SongwritersResponse;
 import io.songlinks.model.VersionResponse;
 import io.songlinks.model.WritersResponse;
 import java.io.IOException;
@@ -21,6 +22,7 @@ import java.time.Duration;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -42,9 +44,11 @@ import java.util.stream.StreamSupport;
  */
 public final class Songlinks {
     /** This SDK's release, sent in the User-Agent so the API's logs can tell SDK versions apart. */
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = "0.2.0";
     /** The most IPI name numbers {@code /v1/writers} accepts in one call. */
     public static final int WRITERS_MAX = 50;
+    /** The most ISRCs {@code /v1/songwriters} accepts in one call. */
+    public static final int SONGWRITERS_MAX = 50;
     /** The most works one person read returns; {@link #personWorks} pages through the rest. */
     public static final int WORKS_PAGE_MAX = 200;
     /** The longest wait the client sleeps through before retrying; a longer one is thrown to the caller at once. */
@@ -228,20 +232,60 @@ public final class Songlinks {
      * @throws SonglinksException       when the API answers with an error
      */
     public WritersResponse writers(List<String> ipiNameNumbers) {
-        if (ipiNameNumbers.isEmpty()) throw new IllegalArgumentException("writers() needs at least one IPI name number");
-        if (ipiNameNumbers.size() > WRITERS_MAX) {
-            throw new IllegalArgumentException("writers() takes at most " + WRITERS_MAX + " IPI name numbers per call");
+        checkBatch(ipiNameNumbers, WRITERS_MAX, "writers()", "IPI name number");
+        return get("/v1/writers", Map.of("ipi", String.join(",", ipiNameNumbers)), WritersResponse.class);
+    }
+
+    /**
+     * Finds who wrote up to 50 recordings at once, by ISRC. For each recording: the songs (works) it is registered
+     * to, the writers registered on each song, and the Songlinks person behind each writer. The API refuses a longer
+     * list rather than shortening it, and so does this method: for more, call it once for each batch of
+     * {@link #SONGWRITERS_MAX}.
+     *
+     * <p>The answer has one entry per distinct ISRC, in the order each was first sent, written as 12 characters in
+     * upper case with no dashes or spaces. Two forms of one ISRC ({@code US-MC1-99-59123} and {@code usmc19959123})
+     * and repeats come back as one entry, so match answers to your list by ISRC, not by position:
+     * {@link #normalizeIsrc(String)} turns your input into the form the answer uses.
+     *
+     * <p>Each entry's {@code status()} is one of three. {@code "registered"}: its {@code works()} are filled.
+     * {@code "unregistered"}: no song in the registration data lists this recording, which is an ordinary answer, not
+     * an error. {@code "invalid"}: the entry is not an ISRC; it is echoed back as sent and does not fail the call.
+     *
+     * <p>A writer's {@code persistentId()} is null when their record is not part of a stored person yet, which is
+     * common for writers registered without an IPI name number; their {@code name()} and {@code role()} are still
+     * there.
+     *
+     * @param isrcs the ISRCs to look up, such as {@code USMC19959123}. Case does not matter, and spaces and dashes
+     *              inside an ISRC are ignored.
+     * @return for each distinct ISRC, its status and the works and writers it is registered to
+     * @throws IllegalArgumentException when the list is empty, holds more than 50 ISRCs, or has an entry holding a
+     *                                  comma, semicolon, line break or the text {@code %2C} (which the API would read as
+     *                                  several ISRCs), or a null entry
+     * @throws SonglinksException       when the API answers with an error
+     */
+    public SongwritersResponse songwriters(List<String> isrcs) {
+        checkBatch(isrcs, SONGWRITERS_MAX, "songwriters()", "ISRC");
+        return get("/v1/songwriters", Map.of("isrc", String.join(",", isrcs)), SongwritersResponse.class);
+    }
+
+    /**
+     * The checks {@link #writers} and {@link #songwriters} share, made before any request so a mistake costs no call
+     * against the rate limit: both endpoints take a list of up to 50 and split it on the same separators.
+     */
+    private static void checkBatch(List<String> entries, int max, String method, String noun) {
+        if (entries.isEmpty()) throw new IllegalArgumentException(method + " needs at least one " + noun);
+        if (entries.size() > max) {
+            throw new IllegalArgumentException(method + " takes at most " + max + " " + noun + "s per call");
         }
-        for (String n : ipiNameNumbers) {
-            if (n == null) throw new IllegalArgumentException("writers() was given a null IPI name number");
+        for (String n : entries) {
+            if (n == null) throw new IllegalArgumentException(method + " was given a null " + noun);
             // The API splits its list on these, and on the text %2C, so one entry holding one would be read as several.
             // The edges are trimmed first, as the API trims them, so a line read from a Windows file (ending "\r") passes.
-            String inner = IPI_EDGE_SPACE.matcher(n).replaceAll("");
+            String inner = EDGE_SPACE.matcher(n).replaceAll("");
             if (inner.matches("(?s).*([,;\\r\\n]|%2[cC]).*")) {
-                throw new IllegalArgumentException("writers() takes one IPI name number per entry, got \"" + n + "\"");
+                throw new IllegalArgumentException(method + " takes one " + noun + " per entry, got \"" + n + "\"");
             }
         }
-        return get("/v1/writers", Map.of("ipi", String.join(",", ipiNameNumbers)), WritersResponse.class);
     }
 
     /**
@@ -269,7 +313,32 @@ public final class Songlinks {
         // The same reading as the API's own (writer/service.py ipi_key).
         String digits = IPI_SEPARATORS.matcher(ipiNameNumber).replaceAll("");
         if (IPI_DIGITS.matcher(digits).matches()) return "0".repeat(11 - digits.length()) + digits;
-        String trimmed = IPI_EDGE_SPACE.matcher(ipiNameNumber).replaceAll("");
+        return asEchoed(ipiNameNumber);
+    }
+
+    /**
+     * Writes an ISRC the way {@link #songwriters(List)} answers do, so the answers can be matched to the ISRCs you
+     * sent. Spaces and dashes are dropped and letters upper-cased: {@code US-MC1-99-59123} and {@code usmc1 99 59123}
+     * both become {@code USMC19959123}. Anything that is then not two letters, three letters or digits and seven digits
+     * is not an ISRC, and is returned trimmed (to 32 characters), as the API echoes it with status {@code invalid}.
+     * Unlike {@link #normalizeIpi(String)}, only the plain hyphen counts as a dash: the API does not drop the
+     * typographic dashes (such as an en dash) a word processor substitutes, so an ISRC written with one is answered
+     * {@code invalid}.
+     *
+     * @param isrc an ISRC as you have it, such as {@code US-MC1-99-59123} or {@code usmc19959123}
+     * @return the ISRC as 12 characters, such as {@code USMC19959123}, or the trimmed input when it is not one
+     */
+    public static String normalizeIsrc(String isrc) {
+        // The same reading as the API's own (writer/work_pages.py isrc_key). Locale.ROOT, because in a Turkish locale
+        // "i" upper-cases to a dotted capital I and a valid ISRC would come back invalid.
+        String key = ISRC_SEPARATORS.matcher(isrc).replaceAll("").toUpperCase(Locale.ROOT);
+        if (ISRC_SHAPE.matcher(key).matches()) return key;
+        return asEchoed(isrc);
+    }
+
+    /** An invalid entry as the API echoes it: trimmed, then cut to 32 characters (code points, as Python counts). */
+    private static String asEchoed(String entry) {
+        String trimmed = EDGE_SPACE.matcher(entry).replaceAll("");
         return trimmed.codePointCount(0, trimmed.length()) > 32
                 ? trimmed.substring(0, trimmed.offsetByCodePoints(0, 32)) : trimmed;
     }
@@ -278,9 +347,16 @@ public final class Songlinks {
     // UNICODE_CHARACTER_CLASS is set, and without it a number pasted with non-breaking spaces would not match.
     private static final Pattern IPI_SEPARATORS = Pattern.compile(
             "[\\s\\x{1c}-\\x{1f}\\-\\x{2010}-\\x{2015}\\x{2212}]", Pattern.UNICODE_CHARACTER_CLASS);
-    private static final Pattern IPI_EDGE_SPACE = Pattern.compile(
+    private static final Pattern EDGE_SPACE = Pattern.compile(
             "^[\\s\\x{1c}-\\x{1f}]+|[\\s\\x{1c}-\\x{1f}]+$", Pattern.UNICODE_CHARACTER_CLASS);
     private static final Pattern IPI_DIGITS = Pattern.compile("[0-9]{1,11}");
+    // The API's isrc_key drops only Python's \s and the ASCII hyphen, not the typographic dashes IPI_SEPARATORS takes.
+    private static final Pattern ISRC_SEPARATORS = Pattern.compile("[\\s\\x{1c}-\\x{1f}\\-]",
+            Pattern.UNICODE_CHARACTER_CLASS);
+    // \d is Unicode-aware here, as Python's is in the API's pattern, so the two agree even on non-ASCII digits (which
+    // the API accepts as an ISRC and answers unregistered). [A-Z] stays ASCII in both.
+    private static final Pattern ISRC_SHAPE = Pattern.compile("[A-Z]{2}[A-Z0-9]{3}\\d{7}",
+            Pattern.UNICODE_CHARACTER_CLASS);
 
     private <T> T get(String path, Map<String, String> query, Class<T> type) {
         String qs = query.entrySet().stream()

@@ -3,7 +3,8 @@
 [![ci](https://github.com/Alexkane/songlinks-java/actions/workflows/ci.yml/badge.svg)](https://github.com/Alexkane/songlinks-java/actions/workflows/ci.yml)
 [![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
-**Find the songwriter behind a name.** The official Java SDK for [Songlinks](https://songlinks.io).
+**Find the songwriter behind a name, an IPI name number or a recording's ISRC.** The official Java SDK for
+[Songlinks](https://songlinks.io).
 
 One songwriter is rarely one record. They're registered under different spellings, under several IPI name numbers, or
 with no number at all. Songlinks groups those registrations into one person, shows the evidence for every join, and
@@ -30,11 +31,11 @@ Then depend on it as usual:
 <dependency>
   <groupId>io.songlinks</groupId>
   <artifactId>songlinks</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
 </dependency>
 ```
 
-Gradle: `implementation("io.songlinks:songlinks:0.1.0")`
+Gradle: `implementation("io.songlinks:songlinks:0.2.0")`
 
 ## Thirty seconds
 
@@ -62,6 +63,12 @@ WritersResponse check = songlinks.writers(List.of("00338980326", "00340247397"))
 check.writers().forEach(w -> System.out.println(w.name() + " " + w.personId()));
 // MARK HOPPUS SLP-ZYM7-GD3E-S
 // TRAVIS L BARKER SLP-MG23-XM9B-Y
+
+RecordingAnswer recording = songlinks.songwriters(List.of("USMC19959123")).recordings().get(0);
+recording.works().get(0).writers().forEach(w -> System.out.println(w.name() + " " + w.persistentId()));
+// MARK HOPPUS SLP-ZYM7-GD3E-S
+// TRAVIS L BARKER SLP-MG23-XM9B-Y
+// THOMAS DELONGE SLP-MEA6-3QQJ-C
 ```
 
 Every person has a page you can link to, such as [songlinks.io/person/SLP-ZYM7-GD3E-S](https://songlinks.io/person/SLP-ZYM7-GD3E-S).
@@ -81,6 +88,68 @@ SongMatch match = songlinks.lookup("amy allen", LookupOptions.song("espresso")).
 // Every work of a person, read lazily, a page at a time.
 songlinks.personWorks("SLP-ZYM7-GD3E-S").forEach(w -> System.out.println(w.title()));
 ```
+
+## Who wrote a recording? Songwriters by ISRC
+
+Have a list of recordings, say from a label's catalogue or a distributor's report? `songwriters()` takes up to 50 of
+their ISRCs at once and answers, for each recording, the songs it is registered to, the writers registered on each
+song, and the Songlinks person behind each writer.
+
+```java
+// Continuing from the code above, where `songlinks` was created. Also import java.util.HashMap and java.util.Map.
+List<String> isrcs = List.of("USMC19959123", "US-SM1-95-00008", "not-an-isrc");
+SongwritersResponse answer = songlinks.songwriters(isrcs);
+
+// One answer per distinct ISRC. Match them to your list by ISRC, not by position.
+Map<String, RecordingAnswer> byIsrc = new HashMap<>();
+answer.recordings().forEach(r -> byIsrc.put(r.isrc(), r));
+
+for (String isrc : isrcs) {
+    RecordingAnswer r = byIsrc.get(Songlinks.normalizeIsrc(isrc));  // "US-SM1-95-00008" -> "USSM19500008"
+    System.out.println(isrc + ": " + r.status());
+    for (RecordingWork work : r.works()) {
+        for (RecordingWriter w : work.writers()) {
+            System.out.println("  " + work.title() + " / " + w.name() + " / " + w.persistentId());
+        }
+    }
+}
+// USMC19959123: registered
+//   ALL THE SMALL THINGS / MARK HOPPUS / SLP-ZYM7-GD3E-S
+//   ALL THE SMALL THINGS / TRAVIS L BARKER / SLP-MG23-XM9B-Y
+//   ALL THE SMALL THINGS / THOMAS DELONGE / SLP-MEA6-3QQJ-C
+// US-SM1-95-00008: registered
+//   STRANGER IN MOSCOW / MICHAEL JOE JACKSON / null
+// not-an-isrc: invalid
+```
+
+**What each `status()` means:**
+
+- **`registered`**: the recording is listed on at least one registered song. `works()` holds those songs, each with
+  its title, ISWC (null when the song has none) and writers.
+- **`unregistered`**: no registered song lists this recording. This is an ordinary answer, not an error: it says
+  what the registration data holds today, and `works()` is empty.
+- **`invalid`**: the entry is not an ISRC (see [the words used here](#the-words-used-here) for the shape). It is
+  echoed back as you sent it, and the rest of the list is still answered. `works()` is empty.
+
+**A writer's person ID can be null**, as Michael Jackson's is above, and that is common: nearly half of the
+registered recordings have at least one such writer. It means the writer's registration record has not been grouped
+into a stored Songlinks person yet. Records registered without an IPI name number are often in that state, but not
+only those: the record above has one. The writer's `name()`, `role()` and `ipiNameNumber()` (when there is one) are still there; to see who that name could be,
+pass it to `lookup()`. `personUrl()` is null whenever `persistentId()` is.
+
+**Good to know:**
+
+- Case doesn't matter, and spaces and dashes inside an ISRC are ignored: `US-MC1-99-59123`, `usmc1 99 59123` and
+  `USMC19959123` are the same ISRC, and come back once, written as `USMC19959123`. `Songlinks.normalizeIsrc()` writes
+  your input the same way, so you can find its answer.
+- Only the plain hyphen (`-`) counts as a dash. An ISRC typed with an en dash (`–`), as some word processors
+  substitute, comes back `invalid`.
+- The SDK refuses an empty list, more than `Songlinks.SONGWRITERS_MAX` (50) entries, and an entry holding a comma,
+  semicolon or line break, before calling the API. For a longer list, call it once per batch of 50, as
+  [`examples/WhoWrote.java`](examples/WhoWrote.java) does.
+- One call counts as one request against the [rate limit](#fair-use), however many ISRCs it holds.
+- Each work's `writers()` list holds songwriters only: publishers and administrators are left out, and so are
+  ownership shares.
 
 ## Your first program, step by step
 
@@ -155,6 +224,13 @@ Music-publishing words, which you'll meet in the answers:
   [More about IPI name numbers](https://songlinks.io/guides/ipi-name-numbers).
 - **Work**: a song as a composition (the melody and lyrics), as opposed to a particular recording of it.
 - **ISWC**: the international code for a work, such as `T0719661581`. Not every registered work has one.
+- **ISRC**: the international code for one recording, such as `USMC19959123` (Blink-182's recording of "All the Small
+  Things"). An ISWC identifies the song as written; an ISRC identifies one recording of it, so one song with a studio
+  version, a live version and a cover has one ISWC and three ISRCs. An ISRC is 12 characters: two letters (a country
+  code), three letters or digits (who issued it), then seven digits (the year and a number). It is often written with
+  dashes, as in `US-MC1-99-59123`.
+- **Song code**: the registration data's own code for a work, such as `A12144`. Every registered work has one, so it
+  is the way to tell works apart when one has no ISWC.
 - **Person** and **person ID**: Songlinks groups the records it judges to be one human into a person and gives them a
   person ID, such as `SLP-ZYM7-GD3E-S`. Every person has a page, such as
   [songlinks.io/person/SLP-ZYM7-GD3E-S](https://songlinks.io/person/SLP-ZYM7-GD3E-S).
@@ -192,6 +268,7 @@ Runnable programs for the jobs people use Songlinks for, each under 40 lines. Co
 | [`WhichNamesake.java`](examples/WhichNamesake.java) | Two writers share a name: which one wrote this song? |
 | [`CheckRoster.java`](examples/CheckRoster.java) | A list of IPI name numbers in, CSV out: who holds each and their works. |
 | [`ExportCatalogue.java`](examples/ExportCatalogue.java) | Every work of a person, as CSV. |
+| [`WhoWrote.java`](examples/WhoWrote.java) | ISRCs in: the songs each recording is registered to, and their writers. |
 
 From a checkout, `scripts/run-example.sh` builds the SDK once and runs any of them:
 
@@ -209,6 +286,7 @@ The examples are compiled in CI against the SDK, so one that misreads a field fa
 | `person(id)`, `person(id, offset, limit)` | `GET /v1/person/{id}` | One person: their registrations, names, IPI name numbers and a page of works. |
 | `personWorks(id)` | `GET /v1/person/{id}` | Every work of a person, as a lazy `Stream`. |
 | `writers(ipiNameNumbers)` | `GET /v1/writers` | Up to 50 IPI name numbers checked at once: the stored person behind each. |
+| `songwriters(isrcs)` | `GET /v1/songwriters` | Up to 50 recordings by ISRC: the songs each is registered to, their writers and the person behind each. |
 | `version()` | `GET /v1/version` | What is serving: the release, the model and the date of the registration data. |
 
 ### Reading an answer
@@ -221,6 +299,9 @@ A **person** and a **candidate** are different things: see [the words used here]
 - **Match a writers check by number, not position.** Repeats and two forms of one number come back as one entry, as
   11 digits. `Songlinks.normalizeIpi()` turns your input into the same form. Its `works()` and `name()` are null
   unless `status()` is `"person"`.
+- **Match a songwriters answer by ISRC, not position.** Repeats and two forms of one ISRC come back as one entry,
+  12 characters in upper case. `Songlinks.normalizeIsrc()` turns your input into the same form. A writer's
+  `persistentId()` is often null: see [songwriters by ISRC](#who-wrote-a-recording-songwriters-by-isrc).
 - **A lookup candidate is not a stored person.** It is the lookup's own grouping, made for the name you asked.
   `persistentId()` is the stored person when there is exactly one. A candidate whose records belong to more than one
   stored person has no `persistentId()` and lists them in `storedPersons()`. Read each record's own `persistentId()`.

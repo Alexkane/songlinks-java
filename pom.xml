@@ -6,12 +6,12 @@
 
   <groupId>io.songlinks</groupId>
   <artifactId>songlinks</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <packaging>jar</packaging>
 
   <name>Songlinks Java SDK</name>
-  <description>Official Java SDK for the Songlinks API: look up a songwriter by name or IPI name number and get the
-    person behind every registration, with their works and ISWCs.</description>
+  <description>Official Java SDK for the Songlinks API: look up a songwriter by name, IPI name number or a recording's
+    ISRC and get the person behind every registration, with their works and ISWCs.</description>
   <url>https://songlinks.io/v1/docs</url>
 
   <licenses>

@@ -31,7 +31,8 @@ NAMES = {
     "PersonProvenance": "PersonProvenance", "BuildRef": "BuildRef",
     "PersonWithdrawnResponse": "PersonWithdrawnResponse", "WritersResponse": "WritersResponse",
     "WriterAnswer": "WriterAnswer", "WritersSummary": "WritersSummary", "VersionResponse": "VersionResponse",
-    "Error": "ApiError", "RateLimited": "RateLimited",
+    "Error": "ApiError", "RateLimited": "RateLimited", "SongwritersResponse": "SongwritersResponse",
+    "RecordingAnswer": "RecordingAnswer", "RecordingWork": "RecordingWork", "RecordingWriter": "RecordingWriter",
 }
 # Integers that are identifiers, read as long so no future id outgrows int.
 LONG_FIELDS = {"party_record_id", "build_id", "from_record"}
@@ -77,6 +78,8 @@ OVERRIDES = {
         "{@code Songlinks.person(id, offset, limit)}, or read them all with {@code Songlinks.personWorks(id)}.",
     ("WorksPage", "next_offset"): "The offset to ask for next, as the {@code worksOffset} argument of "
         "{@code Songlinks.person(id, offset, limit)}; null on the last page.",
+    ("RecordingWriter", "person_url"): "The person's page, relative to https://songlinks.io, such as "
+        "{@code /person/SLP-ZYM7-GD3E-S}; null when {@code persistentId()} is.",
     ("SongRecord", "party_record_id"): "The record, as it appears in a candidate's {@code records()}.",
     ("SongRecord", "ref"): "The candidate holding the record, by its {@code ref()}.",
     ("WriterAnswer", "person_url"): "The page to open, relative to https://songlinks.io: the person's page, or for "
